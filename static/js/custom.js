@@ -49,7 +49,7 @@ $(document).ready(function() {
   
 
   // 添加响应消息到窗口,流式响应此方法会执行多次
-  function addResponseMessage(message) {
+  function addResponseMessage(message,type) {
     let lastResponseElement = $(".message-bubble .response").last();
     lastResponseElement.empty();
     if ($(".answer .others .center").css("display") === "none") {
@@ -64,7 +64,7 @@ $(document).ready(function() {
       index = message.indexOf('```', index + 3);
     }
     if(codeMarkCount % 2 == 1  ){  // 有未闭合的 code
-      escapedMessage = marked.parse(message + '\n\n```'); 
+      escapedMessage = marked.parse(message + '\n\n```');
     }else if(codeMarkCount % 2 == 0 && codeMarkCount != 0){
       escapedMessage = marked.parse(message);  // 响应消息markdown实时转换为html
     }else if(codeMarkCount == 0){  // 输出的代码没有markdown代码块
@@ -74,7 +74,13 @@ $(document).ready(function() {
         escapedMessage = marked.parse(escapeHtml(message)); // 有可能不是markdown格式，都用escapeHtml处理后再转换，防止非markdown格式html紊乱页面
       }
     }
+    if(type=="1"){
     lastResponseElement.append(escapedMessage);
+    }else if(type=="2"){
+    str = '<img src=' +  message + '>'
+    lastResponseElement.append(str);
+    }
+
     chatWindow.scrollTop(chatWindow.prop('scrollHeight'));
   }
 
@@ -89,19 +95,20 @@ $(document).ready(function() {
 
   // 定义一个变量保存ajax请求对象
   let ajaxRequest = null;
-  
+
   // 处理用户输入
   chatBtn.click(function() {
     // 解绑键盘事件
     chatInput.off("keydown",handleEnter);
-    
+
     // ajax上传数据
     let data = {};
     data.model = $(".settings-common .model").val();
+    data.imgType=$(".settings-common .imgtype").val();
 
     // 判断消息是否是正常的标志变量
     let resFlag = true;
-   
+
     // 判断是否使用自己的api key
     let apiKey = localStorage.getItem('apiKey');
     if (apiKey){
@@ -129,7 +136,7 @@ $(document).ready(function() {
       chatBtn.attr('disabled',false) // 让按钮可点击
       return ;
     }
-    
+
     // 判读是否已开启连续对话
     data.prompts = messages.slice();  // 拷贝一份全局messages赋值给data.prompts,然后对data.prompts处理
     if(localStorage.getItem('continuousDialogue') == 'true'){
@@ -141,8 +148,16 @@ $(document).ready(function() {
       data.prompts.splice(0, data.prompts.length - 1); // 未开启连续对话，取最后一条
     }
     data.prompts = JSON.stringify(data.prompts);
-    
+
     let res;
+    if(data.model=="image"){
+          imageget();
+    }else if(data.model=="gpt-3.5-turbo-0613"){
+          chatpost();
+    }
+
+
+function chatpost(){
     // 发送信息到后台
     ajaxRequest = $.ajax({
       url: '/chat',
@@ -158,10 +173,10 @@ $(document).ready(function() {
               addFailMessage(resJsonObj.error.type + " : " + resJsonObj.error.message + " " + resJsonObj.error.code);
               resFlag = false;
             }else{
-              addResponseMessage(res);
+              addResponseMessage(res,"1");
             }
           }catch(e){
-            addResponseMessage(res);
+            addResponseMessage(res,"1");
           }
         }
       },
@@ -189,13 +204,71 @@ $(document).ready(function() {
         // 收到回复，让按钮可点击
         chatBtn.attr('disabled',false)
         // 重新绑定键盘事件
-        chatInput.on("keydown",handleEnter); 
+        chatInput.on("keydown",handleEnter);
         ajaxRequest = null;
         $(".answer .others .center").css("display","none");
         // 添加复制
         copy();
       }
     });
+}
+
+function imageget(){
+    // 发送信息到后台
+    ajaxRequest = $.ajax({
+      url: '/image',
+      method: 'POST',
+      data: data,
+      xhrFields: {
+        onprogress: function(e) {
+          res = e.target.responseText;
+          let resJsonObj;
+          try{
+            resJsonObj = JSON.parse(res);  // 只有错误信息是json类型字符串,且一次返回
+            if(resJsonObj.hasOwnProperty("error")){
+              addFailMessage(resJsonObj.error.type + " : " + resJsonObj.error.message + " " + resJsonObj.error.code);
+              resFlag = false;
+            }else{
+              addResponseMessage(res,"2");
+            }
+          }catch(e){
+            addResponseMessage(res,"2");
+          }
+        }
+      },
+      success:function(result){
+        // 判断是否是回复正确信息
+        if(resFlag){
+          messages.push({"role": "assistant", "content": result});
+          // 判断是否本地存储历史会话
+          if(localStorage.getItem('archiveSession')=="true"){
+            localStorage.setItem("session",JSON.stringify(messages));
+          }
+        }
+      },
+      error: function(jqXHR, textStatus, errorThrown) {
+        if (textStatus === 'abort') {
+          messages.push({"role": "assistant", "content": res});
+          if(localStorage.getItem('archiveSession')=="true"){
+            localStorage.setItem("session",JSON.stringify(messages));
+          }
+        } else {
+          addFailMessage('出错啦！请稍后再试!');
+        }
+      },
+      complete : function(XMLHttpRequest,status){
+        // 收到回复，让按钮可点击
+        chatBtn.attr('disabled',false)
+        // 重新绑定键盘事件
+        chatInput.on("keydown",handleEnter);
+        ajaxRequest = null;
+        $(".answer .others .center").css("display","none");
+        // 添加复制
+        copy();
+      }
+    });
+}
+
   });
 
   // 停止输出
@@ -219,13 +292,13 @@ $(document).ready(function() {
   // 设置栏宽度自适应
   let width = $('.function .others').width();
   $('.function .settings .dropdown-menu').css('width', width);
-  
+
   $(window).resize(function() {
     width = $('.function .others').width();
     $('.function .settings .dropdown-menu').css('width', width);
   });
 
-  
+
   // 主题
   function setBgColor(theme){
     $(':root').attr('bg-theme', theme);
@@ -233,7 +306,7 @@ $(document).ready(function() {
     // 定位在文档外的元素也同步主题色
     $('.settings-common').css('background-color', 'var(--bg-color)');
   }
-  
+
   let theme = localStorage.getItem('theme');
   // 如果之前选择了主题，则将其应用到网站中
   if (theme) {
@@ -260,7 +333,7 @@ $(document).ready(function() {
   }
 
   // apiKey输入框事件
-  $(".settings-common .api-key").blur(function() { 
+  $(".settings-common .api-key").blur(function() {
     const apiKey = $(this).val();
     if(apiKey.length!=0){
       localStorage.setItem('apiKey', apiKey);
@@ -277,7 +350,7 @@ $(document).ready(function() {
     archiveSession = "false";
     localStorage.setItem('archiveSession', archiveSession);
   }
-  
+
   if(archiveSession == "true"){
     $("#chck-1").prop("checked", true);
   }else{
@@ -297,7 +370,7 @@ $(document).ready(function() {
       localStorage.removeItem("session");
     }
   });
-  
+
   // 加载历史保存会话
   if(archiveSession == "true"){
     const messagesList = JSON.parse(localStorage.getItem("session"));
@@ -307,7 +380,7 @@ $(document).ready(function() {
         if (item.role === 'user') {
           addRequestMessage(item.content)
         } else if (item.role === 'assistant') {
-          addResponseMessage(item.content)
+          addResponseMessage(item.content,"1")
         }
       });
       $(".answer .others .center").css("display", "none");
@@ -324,7 +397,7 @@ $(document).ready(function() {
     continuousDialogue = "true";
     localStorage.setItem('continuousDialogue', continuousDialogue);
   }
-  
+
   if(continuousDialogue == "true"){
     $("#chck-2").prop("checked", true);
   }else{
@@ -421,4 +494,7 @@ $(document).ready(function() {
       }, 2000);
     });
   }
+
+
+
 });
