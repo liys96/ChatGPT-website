@@ -19,7 +19,7 @@ def index():
 def chat():
     messages = request.form.get("prompts", None)
     apiKey = request.form.get("apiKey", None)
-    model = request.form.get("model", "gpt-3.5-turbo-0613")
+    model = request.form.get("model", "gpt-3.5-turbo")
     if messages is None:
         return jsonify({"error": {"message": "请输入prompts！", "type": "invalid_request_error", "code": ""}})
 
@@ -121,7 +121,7 @@ def list():
                 else:
                     if "content" in delData["delta"]:
                         respStr = delData["delta"]["content"]
-                        # print(respStr)
+                        # print(respStr)0+
                         yield respStr
 
         # 如果出现错误，此时错误信息迭代器已处理完，app_context已经出栈，要返回错误信息，需要将app_context手动入栈

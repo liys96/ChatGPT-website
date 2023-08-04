@@ -152,7 +152,7 @@ $(document).ready(function() {
     let res;
     if(data.model=="image"){
           imageget();
-    }else if(data.model=="gpt-3.5-turbo-0613"){
+    }else if(data.model=="gpt-3.5-turbo"){
           chatpost();
     }
 
